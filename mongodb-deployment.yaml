@@ -1,9 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
+  labels:
+    app: mongodb
+    app.openshift.io/runtime: mongodb
   name: mongodb
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: mongodb
@@ -13,47 +15,37 @@ spec:
         app: mongodb
     spec:
       containers:
-      - name: mongodb
-        image: mongo:7
-        ports:
-        - containerPort: 27017
-        envFrom:
-        - configMapRef:
-            name: db-env
-        volumeMounts:
-        - name: mongodb-data
-          mountPath: /data/db
-      initContainers:
-      - name: fix-permissions
-        image: busybox
-        command: ["sh", "-c", "chmod -R 777 /data/db"]
-        volumeMounts:
-        - name: mongodb-data
-          mountPath: /data/db
-      volumes:
-      - name: mongodb-data
-        persistentVolumeClaim:
-          claimName: mongodb-pvc
+        - args:
+            - --bind_ip_all
+          image: quay.io/mohamedf0/mongo@sha256:53c4915c2c13524007a84b472f8c0b0a3c4f889afcb014306b628b2e82d0b658
+          name: mongodb
+          ports:
+            - containerPort: 27017
+          volumeMounts:
+            - mountPath: /data/db
+              name: mongodb
+  volumeClaimTemplates:
+    - metadata:
+        name: mongodb
+        labels:
+          app: monogdb
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi
+        storageClassName: ocs-external-storagecluster-ceph-rbd
+        volumeMode: Filesystem
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: mongodb-service
-spec:
-  selector:
+  labels:
     app: mongodb
+  name: mongodb
+spec:
   ports:
     - port: 27017
-      targetPort: 27017
-
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: mongodb-pvc
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 1Gi
+  selector:
+    app: mongodb
